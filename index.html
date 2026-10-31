@@ -38,6 +38,11 @@ a { color: var(--accent); }
 .masthead .wrap { padding-block: 34px 26px; display: grid; gap: 12px; }
 .eyebrow { font: 500 11.5px/1.4 var(--f-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 0; }
 h1 { font: 600 clamp(27px, 4vw, 40px)/1.15 var(--f-display); margin: 0; max-width: 28ch; text-wrap: balance; }
+.byline { font-size: 14px; color: var(--fg); margin: 2px 0 0; }
+.byline span { color: var(--muted); }
+.mast-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.theme-btn { font: 500 12.5px/1 var(--f-body); color: var(--fg); background: var(--raised); border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; cursor: pointer; }
+.theme-btn:hover { border-color: var(--accent); }
 .lede { font-size: 17px; color: var(--muted); max-width: 72ch; margin: 0; }
 
 nav.tabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
@@ -132,11 +137,31 @@ footer { padding-block: 20px 44px; border-top: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
+<script>
+(function () {
+  var root = document.documentElement, t = "light";
+  try { t = localStorage.getItem("theme") || "light"; } catch (e) {}
+  root.setAttribute("data-theme", t);
+  function label() { document.getElementById("theme-btn").textContent = root.getAttribute("data-theme") === "dark" ? "Light mode" : "Dark mode"; }
+  document.addEventListener("DOMContentLoaded", function () {
+    label();
+    document.getElementById("theme-btn").addEventListener("click", function () {
+      var n = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", n); label();
+      try { localStorage.setItem("theme", n); } catch (e) {}
+    });
+  });
+})();
+</script>
 <header class="masthead">
   <div class="wrap">
-    <p class="eyebrow">North Indian Ocean · preliminary analysis · progress report, Oct 2026</p>
+    <div class="mast-top">
+      <p class="eyebrow">North Indian Ocean · preliminary analysis · progress report, Oct 2026</p>
+      <button type="button" class="theme-btn" id="theme-btn" aria-label="Switch colour theme">Dark mode</button>
+    </div>
     <h1>Can ERA5 and CMIP6 see North Indian Ocean cyclones and their rapid intensification?</h1>
     <p class="lede">Two objective cyclone trackers (UZ and OWZ) run on 28 IMD-documented storms in ERA5 and on 12 CMIP6 climate models for 1950–2050, checked against the IMD best track. Every chart on this site is interactive: hover for values, drag to zoom, double-click to reset, click legend entries to hide them.</p>
+    <p class="byline">Mohit Kumar <span>· Junior Research Fellow</span> &nbsp;|&nbsp; <span>Principal Investigator:</span> Prof. Sarvesh Kumar Dubey</p>
   </div>
 </header>
 <nav class="tabs" aria-label="Report sections">
