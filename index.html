@@ -1,0 +1,949 @@
+<meta charset="utf-8">
+<title>NIO Cyclone Detection Check</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky section bar over a single 1120px column; reading text held to ~72ch, charts span the column. Synoptic-chart palette: cool paper, sea-blue ink, red reserved for RI. */
+:root {
+  --bg: #f4f6f7; --surface: #ffffff; --raised: #eef2f4; --fg: #14212c; --muted: #566573; --line: #d5dde3; --grid: #e3e9ed;
+  --accent: #0f5f86; --accent-soft: #dcebf3;
+  --imd: #1d2a35; --uz: #2a78d6; --owz: #eb6834; --ri: #c0362c; --nri: #5d7286;
+  --land: #e4e1d6; --coast: #b5ad97; --sea: #f7fafb;
+  --f-display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e151b; --surface: #151f27; --raised: #1b2731; --fg: #e2e8ed; --muted: #97a6b3; --line: #2a3843; --grid: #22303a;
+  --accent: #7cc0e4; --accent-soft: #1b3443;
+  --imd: #e8edf1; --uz: #3987e5; --owz: #d95926; --ri: #ef7f74; --nri: #93a7b9;
+  --land: #26313a; --coast: #46535e; --sea: #121b22; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e151b; --surface: #151f27; --raised: #1b2731; --fg: #e2e8ed; --muted: #97a6b3; --line: #2a3843; --grid: #22303a;
+  --accent: #7cc0e4; --accent-soft: #1b3443;
+  --imd: #e8edf1; --uz: #3987e5; --owz: #d95926; --ri: #ef7f74; --nri: #93a7b9;
+  --land: #26313a; --coast: #46535e; --sea: #121b22; color-scheme: dark }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--fg); font: 400 15.5px/1.6 var(--f-body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.masthead { background: var(--surface); border-bottom: 1px solid var(--line); }
+.masthead .wrap { padding-block: 34px 26px; display: grid; gap: 12px; }
+.eyebrow { font: 500 11.5px/1.4 var(--f-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 0; }
+h1 { font: 600 clamp(27px, 4vw, 40px)/1.15 var(--f-display); margin: 0; max-width: 28ch; text-wrap: balance; }
+.lede { font-size: 17px; color: var(--muted); max-width: 72ch; margin: 0; }
+
+nav.tabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+nav.tabs .wrap { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
+nav.tabs a { flex: none; padding: 12px 12px 10px; font: 500 13.5px/1 var(--f-body); color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; }
+nav.tabs a:hover { color: var(--fg); }
+nav.tabs a[aria-current="page"] { color: var(--fg); border-bottom-color: var(--accent); }
+nav.tabs .num { font: 500 11px var(--f-mono); color: var(--muted); margin-right: 5px; }
+
+main { padding-block: 32px 40px; }
+.view { display: grid; gap: 30px; }
+.view > section { display: grid; gap: 14px; min-width: 0; }
+h2 { font: 600 27px/1.2 var(--f-display); margin: 0; text-wrap: balance; }
+h3 { font: 600 17px/1.3 var(--f-body); margin: 6px 0 0; text-wrap: balance; }
+p { margin: 0; }
+.prose { max-width: 74ch; display: grid; gap: 12px; }
+.muted, .small { color: var(--muted); }
+.small { font-size: 13px; }
+ul, ol { margin: 0; padding-left: 1.3em; display: grid; gap: 7px; }
+code { font: 13px var(--f-mono); background: var(--raised); padding: 1px 4px; border-radius: 3px; }
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; color: var(--muted); max-width: 80ch; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.stat b { font: 600 28px/1.1 var(--f-display); font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.panel .cap { font-size: 13px; color: var(--muted); max-width: 95ch; }
+.panel .cap b { color: var(--fg); font-weight: 600; }
+.plot { width: 100%; min-height: 320px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 14px; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; }
+.ctl { display: grid; gap: 4px; }
+.ctl > label, .ctl > .lab { font: 500 11px/1.2 var(--f-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+select, input[type="number"] { font: 14px var(--f-body); color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
+input[type="number"] { width: 82px; font-family: var(--f-mono); }
+input[type="range"] { width: 200px; accent-color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg button { font: 500 13px var(--f-body); color: var(--muted); background: var(--surface); border: 0; padding: 6px 11px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--fg); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 12.5px var(--f-body); border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 14px; padding: 4px 10px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.chip[aria-pressed="true"] { color: var(--fg); border-color: var(--fg); }
+.chip i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: var(--line); }
+.val { font: 500 13px var(--f-mono); color: var(--fg); }
+
+.pill { display: inline-block; padding: 0 7px; border-radius: 9px; font: 600 11px/1.6 var(--f-body); border: 1px solid; }
+.pill.ri { color: var(--ri); } .pill.nri { color: var(--nri); }
+
+.tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+thead th { font: 600 11px/1.3 var(--f-body); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--raised); }
+th.sort { cursor: pointer; user-select: none; }
+th.sort::after { content: " ↕"; opacity: .4; }
+th.sort[data-dir="asc"]::after { content: " ↑"; opacity: 1; }
+th.sort[data-dir="desc"]::after { content: " ↓"; opacity: 1; }
+table.num td:not(:first-child) { text-align: right; font: 12.5px var(--f-mono); font-variant-numeric: tabular-nums; }
+table.num th:not(:first-child) { text-align: right; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: var(--raised); }
+tr.obs td { font-weight: 600; background: var(--raised); }
+
+.explorer { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 14px; align-items: start; }
+.slist { display: grid; gap: 2px; max-height: 760px; overflow-y: auto; }
+.slist button { display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; font: 14px var(--f-body); color: var(--fg); background: transparent; border: 0; border-radius: 4px; padding: 6px 8px; cursor: pointer; }
+.slist button:hover { background: var(--raised); }
+.slist button[aria-current="true"] { background: var(--accent-soft); font-weight: 600; }
+.slist small { font: 11.5px var(--f-mono); color: var(--muted); }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.kv div { background: var(--raised); border-radius: 4px; padding: 8px 10px; display: grid; gap: 2px; }
+.kv span { font-size: 11.5px; color: var(--muted); }
+.kv b { font: 500 16px var(--f-mono); font-variant-numeric: tabular-nums; }
+.conf { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.conf div { background: var(--raised); border-radius: 4px; padding: 8px 10px; display: grid; }
+.conf b { font: 600 22px var(--f-display); }
+.conf span { font-size: 12px; color: var(--muted); }
+.steps { counter-reset: s; list-style: none; padding: 0; display: grid; gap: 10px; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 30px 1fr; gap: 10px; }
+.steps li::before { content: counter(s); font: 600 14px/26px var(--f-mono); text-align: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
+.loading { padding: 40px 0; color: var(--muted); }
+footer { padding-block: 20px 44px; border-top: 1px solid var(--line); }
+@media (max-width: 760px) {
+  .explorer { grid-template-columns: 1fr; }
+  .slist { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); max-height: 220px; }
+  .conf { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  input[type="range"] { width: 150px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">North Indian Ocean · preliminary analysis · progress report, Oct 2026</p>
+    <h1>Can ERA5 and CMIP6 see North Indian Ocean cyclones and their rapid intensification?</h1>
+    <p class="lede">Two objective cyclone trackers (UZ and OWZ) run on 28 IMD-documented storms in ERA5 and on 12 CMIP6 climate models for 1950–2050, checked against the IMD best track. Every chart on this site is interactive: hover for values, drag to zoom, double-click to reset, click legend entries to hide them.</p>
+  </div>
+</header>
+<nav class="tabs" aria-label="Report sections">
+  <div class="wrap" id="tabs">
+    <a href="#overview"><span class="num">1</span>Overview</a>
+    <a href="#methods"><span class="num">2</span>Data &amp; methods</a>
+    <a href="#storms"><span class="num">3</span>ERA5 storm explorer</a>
+    <a href="#skill"><span class="num">4</span>ERA5 skill &amp; RI</a>
+    <a href="#counts"><span class="num">5</span>CMIP6 counts</a>
+    <a href="#maps"><span class="num">6</span>CMIP6 track maps</a>
+    <a href="#intensity"><span class="num">7</span>CMIP6 intensity &amp; RI</a>
+    <a href="#limits"><span class="num">8</span>Limitations &amp; next steps</a>
+  </div>
+</nav>
+
+<main class="wrap">
+<p class="loading" id="loading">Loading data…</p>
+
+<!-- 1 OVERVIEW -->
+<div class="view" id="v-overview" hidden>
+  <section>
+    <h2>Overview</h2>
+    <div class="prose">
+      <p>This study asks two questions. First, does the ERA5 reanalysis place North Indian Ocean cyclones correctly and capture their intensity, in particular rapid intensification (RI, a wind increase of at least 30 kt in 24 h as defined by IMD)? Second, do present-generation CMIP6 climate models produce cyclones in the Bay of Bengal and Arabian Sea at the right rate and strength, and do they produce RI at all?</p>
+      <p>Both questions are answered with the same two objective trackers, so that ERA5 sets a reference for what each tracker can see before it is applied to the coarser climate models.</p>
+    </div>
+    <div class="stats" id="ov-stats"></div>
+  </section>
+  <section>
+    <h3>What was done</h3>
+    <ol class="steps prose">
+      <li><span><b>Observations.</b> The IMD best track (IBTrACS v04, RSMC New Delhi) was used for positions, 3-hourly maximum sustained wind and central pressure of every North Indian Ocean storm since 1982.</span></li>
+      <li><span><b>ERA5 case studies.</b> For 28 storms (12 RI, 16 NRI) ERA5 pressure-level, sea-level pressure and 10 m wind data were downloaded for each storm's life cycle, both trackers were run, and the tracks and intensity were compared with IMD point by point.</span></li>
+      <li><span><b>CMIP6 subset.</b> Daily fields from 12 CMIP6 models (historical 1950–2014 and SSP5-8.5 2015–2050) were streamed from the Pangeo cloud archive and cut to 0–30°N, 60–105°E (17 GB kept out of about 3 TB).</span></li>
+      <li><span><b>CMIP6 tracking.</b> Both trackers were run on all 1,212 model-years, with peak 850 hPa wind, minimum pressure and day-to-day intensification computed along every track.</span></li>
+      <li><span><b>Validation.</b> Model storm counts, locations, seasonality and intensity were compared with IMD for the common period 1982–2014, and changes to 2050 were examined.</span></li>
+    </ol>
+  </section>
+  <section>
+    <h3>Main findings</h3>
+    <ol class="prose" id="ov-findings"></ol>
+    <p class="note">This is a preliminary analysis. Daily-mean, roughly 1° CMIP6 fields cannot resolve a cyclone core, so low counts and weak intensities are expected; the value here is the comparison between models and against ERA5.</p>
+  </section>
+  <section class="panel">
+    <div class="plot" id="ov-map" style="height:520px"></div>
+    <p class="cap"><b>Figure 1. The 28 study storms.</b> IMD best tracks of the storms analysed with ERA5; red tracks underwent rapid intensification, grey tracks did not. Hover a track for its name, time, wind and pressure. Most storms form in the Bay of Bengal and move north-west towards the Indian, Bangladesh or Myanmar coast; the Arabian Sea storms move north or north-west towards Gujarat, Oman or Pakistan.</p>
+  </section>
+</div>
+
+<!-- 2 METHODS -->
+<div class="view" id="v-methods" hidden>
+  <section>
+    <h2>Data and methods</h2>
+    <h3>Data sources</h3>
+    <div class="tw"><table>
+      <thead><tr><th>Dataset</th><th>Variables used</th><th>Resolution</th><th>Period</th><th>Use</th></tr></thead>
+      <tbody>
+        <tr><td>IMD best track (IBTrACS v04r01, NEWDELHI)</td><td>position, max sustained wind, central pressure, grade</td><td>3-hourly</td><td>1982–2023</td><td>reference tracks, intensity, RI labels, observed climatology</td></tr>
+        <tr><td>ERA5 pressure levels (lab THREDDS)</td><td>u, v, z, q, t at 19 levels</td><td>0.25°, 3-hourly</td><td>storm life ± 1 day</td><td>trackers (vorticity, warm core, humidity, shear)</td></tr>
+        <tr><td>ERA5 single levels (Copernicus CDS)</td><td>mean sea-level pressure, 10 m u and v</td><td>0.25°, 3-hourly</td><td>storm life ± 1 day</td><td>UZ tracker, minimum pressure, 10 m wind</td></tr>
+        <tr><td>CMIP6 (Pangeo Google Cloud Zarr)</td><td>psl; ua, va at 1000/850/250 hPa; zg at 500/250 hPa; hus at 850 hPa</td><td>0.5–2.5°, daily mean</td><td>1950–2014 historical, 2015–2050 SSP5-8.5</td><td>trackers and intensity in 12 models</td></tr>
+        <tr><td>Natural Earth 50 m land</td><td>coastline polygons</td><td>1:50 m</td><td>–</td><td>ocean or land genesis test</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Study storms</h3>
+    <div class="prose"><p>The 28 storms are the RI/NRI list used in the intensity-prediction work: 12 storms that reached RI by the IMD definition and 16 that did not. They span 2006–2023 and every intensity class from cyclonic storm (CS) to super cyclonic storm (SuCS). For each storm ERA5 was retrieved over a box around its IMD track padded by 4°, and over its life cycle padded by one day on each side.</p></div>
+    <h3>Trackers</h3>
+    <div class="prose">
+      <p><b>UZ</b> (Ullrich and Zarzycki 2017, TempestExtremes). A candidate is a local minimum of sea-level pressure that is enclosed by a closed pressure rise within 5.5° and has an upper-level warm core, measured as a drop in the thickness of the upper-tropospheric layer away from the centre within 4°.</p>
+      <p><b>OWZ</b> (Tory et al. 2013). A candidate is a local maximum of 850 hPa relative vorticity that is above a floor, is enclosed by a vorticity fall within 3°, sits in a moist column (850 hPa specific humidity averaged within 2°) and is in weak vertical wind shear (850–200 hPa, averaged within 3°).</p>
+      <p>In both trackers candidates within 6° of each other are merged, and candidates are joined in time into tracks (StitchNodes) with a maximum step of 8° and at most one missing time step. Only centres within 0–35°N, 60–105°E are kept.</p>
+    </div>
+    <div class="tw"><table>
+      <thead><tr><th>Criterion</th><th>ERA5 (0.25°, 3-hourly)</th><th>CMIP6 (daily, about 1°)</th></tr></thead>
+      <tbody>
+        <tr><td>UZ closed sea-level pressure rise</td><td>200 Pa within 5.5°</td><td>150 Pa within 5.5°</td></tr>
+        <tr><td>UZ warm core (thickness drop)</td><td>58.8 m²/s² within 4° (300–500 hPa)</td><td>20 m²/s² within 4° (250–500 hPa)</td></tr>
+        <tr><td>OWZ 850 hPa vorticity floor</td><td>1.0 × 10⁻⁴ s⁻¹</td><td>0.8 × 10⁻⁴ s⁻¹</td></tr>
+        <tr><td>OWZ enclosed vorticity fall</td><td>1.0 × 10⁻⁴ s⁻¹ within 3°</td><td>3.0 × 10⁻⁵ s⁻¹ within 3°</td></tr>
+        <tr><td>OWZ 850 hPa humidity</td><td>≥ 0.010 kg/kg within 2°</td><td>same</td></tr>
+        <tr><td>OWZ vertical shear</td><td>≤ 15 m/s (850–200 hPa) within 3°</td><td>≤ 15 m/s (850–250 hPa)</td></tr>
+        <tr><td>Minimum track length</td><td>4 time steps</td><td>3 days</td></tr>
+      </tbody>
+    </table></div>
+    <p class="small">The CMIP6 thresholds are relaxed because a daily mean on a 1° grid smooths the pressure dip, the warm core and the vorticity peak of a cyclone. The same preset is used for all 12 models.</p>
+    <h3>Intensity and rapid intensification</h3>
+    <div class="prose">
+      <p>At each track point the minimum sea-level pressure within 2° of the centre and the maximum wind speed within 2.5° are taken. ERA5 uses 10 m wind, comparable with IMD's surface wind. CMIP6 uses 850 hPa wind, because the archived 1000 hPa level is masked below ground, which is exactly inside lows deeper than 1000 hPa (ACCESS-CM2, CESM2, MRI-ESM2-0 and KACE-1-0-G).</p>
+      <p>ΔV24 is the change in maximum wind over 24 h. RI follows IMD: ΔV24 ≥ 30 kt. For ERA5, ΔV24 is computed from the 3-hourly series sampled at the IMD fix times; for CMIP6 it is the day-to-day change. Because ERA5 underestimates intensity, a relative threshold is also tested: ERA5 ΔV24 above the 90th percentile of all 28 storms.</p>
+    </div>
+    <h3>Validation measures</h3>
+    <div class="prose">
+      <p><b>Track error</b> is the mean great-circle distance between the ERA5 track and the IMD fixes, after finding the time offset that gives the smallest error (at least 8 overlapping fixes). <b>Intensity bias, RMSE and correlation</b> compare ERA5 and IMD at the IMD fix times along the IMD track. <b>Timing</b> is the time of ERA5's largest ΔV24 minus the IMD RI onset.</p>
+      <p><b>CMIP6 counts</b> are tracks per model-year in 1982–2014, compared with the IMD count of depressions and above (≥ 17 kt) and of cyclonic storms and above (≥ 34 kt). A track counts as an ocean storm if its first point is over the sea; the Bay of Bengal and Arabian Sea are split at 77.5°E.</p>
+    </div>
+    <h3>CMIP6 models</h3>
+    <div class="tw"><table class="num" id="model-table"></table></div>
+    <p class="small">Zarr GB is the full global size of the five daily variables for 1950–2050 in the cloud archive; only the regional subset was saved. HadGEM3-GC31-MM and KACE-1-0-G use a 360-day calendar; HadGEM3, ACCESS-CM2 and KACE store wind on a staggered grid, which was interpolated to the pressure grid. CNRM-CM6-1-HR historical humidity ends in 1929 in the archive, so its OWZ tracks cover 2015–2050 only. One ensemble member per model.</p>
+  </section>
+</div>
+
+<!-- 3 STORM EXPLORER -->
+<div class="view" id="v-storms" hidden>
+  <section>
+    <h2>ERA5 storm explorer</h2>
+    <p class="prose">Choose a storm to see its IMD best track and the two ERA5 tracks, and how ERA5 intensity compares with IMD over its life. The shaded band marks the IMD RI period.</p>
+    <div class="explorer">
+      <div class="panel">
+        <div class="seg" id="st-filter"><button data-v="all" aria-pressed="true">All 28</button><button data-v="RI" aria-pressed="false">RI</button><button data-v="NRI" aria-pressed="false">NRI</button></div>
+        <div class="slist" id="st-list"></div>
+      </div>
+      <div style="display:grid;gap:14px;min-width:0">
+        <div class="panel">
+          <h3 id="st-title"></h3>
+          <p class="cap" id="st-text"></p>
+          <div class="kv" id="st-kv"></div>
+        </div>
+        <div class="two">
+          <div class="panel"><div class="plot" id="st-map" style="height:440px"></div>
+            <p class="cap"><b>Figure 2a. Tracks.</b> IMD best track (dark, with fixes), ERA5 UZ track (blue) and ERA5 OWZ track (orange). Hover a point for time, wind and pressure.</p></div>
+          <div class="panel"><div class="plot" id="st-int" style="height:440px"></div>
+            <p class="cap"><b>Figure 2b. Intensity.</b> Top: maximum wind (kt). Middle: minimum pressure (hPa). Bottom: 24-h wind change; the dashed line is the 30 kt RI threshold. IMD dark, ERA5 orange.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- 4 ERA5 SKILL -->
+<div class="view" id="v-skill" hidden>
+  <section>
+    <h2>ERA5 skill and RI detection</h2>
+    <div class="tw"><table class="num" id="sk-summary"></table></div>
+    <p class="small">Table 1. ERA5 against IMD, averaged over the RI and NRI storms.</p>
+  </section>
+  <section class="panel">
+    <div class="controls">
+      <div class="ctl"><span class="lab">Compare</span>
+        <div class="seg" id="sk-metric">
+          <button data-v="peak" aria-pressed="true">Peak wind</button><button data-v="dv" aria-pressed="false">Max 24-h ΔV</button><button data-v="pmin" aria-pressed="false">Min pressure</button><button data-v="err" aria-pressed="false">Track error</button>
+        </div></div>
+    </div>
+    <div class="plot" id="sk-dumb" style="height:760px"></div>
+    <p class="cap" id="sk-dumb-cap"></p>
+  </section>
+  <div class="two">
+    <section class="panel">
+      <div class="plot" id="sk-scatter" style="height:400px"></div>
+      <p class="cap" id="sk-scatter-cap"></p>
+    </section>
+    <section class="panel">
+      <div class="controls">
+        <div class="ctl"><label for="sk-thr">ERA5 ΔV24 threshold for "RI"</label>
+          <div style="display:flex;gap:10px;align-items:center"><input type="range" id="sk-thr" min="5" max="35" step="0.1" value="19.7"><span class="val" id="sk-thr-v"></span></div></div>
+      </div>
+      <div class="conf" id="sk-conf"></div>
+      <div class="plot" id="sk-strip" style="height:250px"></div>
+      <p class="cap"><b>Figure 5. Try an RI threshold on ERA5.</b> Each dot is one storm's largest ERA5 24-h wind increase. Move the slider: storms right of the line are called RI. At the IMD value of 30 kt ERA5 finds none; the default 19.7 kt is the 90th percentile of all 28 storms, which flags three RI storms and no NRI storm. POD is the share of RI storms caught; FAR is the share of RI calls that are wrong.</p>
+    </section>
+  </div>
+  <section>
+    <h3>All 28 storms</h3>
+    <div class="tw"><table class="num" id="sk-table"></table></div>
+    <p class="small">Table 2. Click a column heading to sort. Timing is ERA5's peak ΔV24 time minus the IMD RI onset, in hours (RI storms only). Burevi has no UZ error because UZ found no track for this weak storm.</p>
+  </section>
+</div>
+
+<!-- 5 CMIP6 COUNTS -->
+<div class="view" id="v-counts" hidden>
+  <section>
+    <h2>CMIP6 storm counts</h2>
+    <p class="prose">How many storms does each model make per year, and how does that compare with IMD? Change the tracker, the period and whether storms that form over land (monsoon lows and heat lows) are counted. IMD bars use the part of the chosen period covered by the best track (1982–2023).</p>
+    <div class="panel">
+      <div class="controls">
+        <div class="ctl"><span class="lab">Tracker</span><div class="seg" id="ct-det"><button data-v="uz" aria-pressed="true">UZ</button><button data-v="owz" aria-pressed="false">OWZ</button></div></div>
+        <div class="ctl"><span class="lab">Genesis</span><div class="seg" id="ct-oc"><button data-v="1" aria-pressed="true">Over sea</button><button data-v="0" aria-pressed="false">All tracks</button></div></div>
+        <div class="ctl"><span class="lab">Split</span><div class="seg" id="ct-split"><button data-v="basin" aria-pressed="true">By basin</button><button data-v="total" aria-pressed="false">Total</button></div></div>
+        <div class="ctl"><label for="ct-y0">From</label><input type="number" id="ct-y0" min="1950" max="2050" value="1982"></div>
+        <div class="ctl"><label for="ct-y1">To</label><input type="number" id="ct-y1" min="1950" max="2050" value="2014"></div>
+        <div class="ctl"><span class="lab">Presets</span><div class="seg" id="ct-pre"><button data-v="1982,2014">1982–2014</button><button data-v="1950,1981">1950–81</button><button data-v="2015,2050">2015–50</button><button data-v="1950,2050">All</button></div></div>
+      </div>
+      <div class="plot" id="ct-bar" style="height:430px"></div>
+      <p class="cap" id="ct-bar-cap"></p>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="controls">
+      <div class="ctl"><span class="lab">Models (up to 6)</span><div class="chips" id="ts-models"></div></div>
+    </div>
+    <div class="controls">
+      <div class="ctl"><label for="ts-smooth">Running mean</label><div style="display:flex;gap:10px;align-items:center"><input type="range" id="ts-smooth" min="1" max="21" step="2" value="11"><span class="val" id="ts-smooth-v"></span></div></div>
+      <div class="ctl"><span class="lab">IMD overlay</span><div class="seg" id="ts-imd"><button data-v="d" aria-pressed="true">Depression+</button><button data-v="cs" aria-pressed="false">Cyclonic storm+</button><button data-v="none" aria-pressed="false">Off</button></div></div>
+    </div>
+    <div class="plot" id="ts-plot" style="height:400px"></div>
+    <p class="cap"><b>Figure 7. Storms per year, 1950–2050.</b> Thin lines are yearly counts and thick lines the running mean, for the tracker and genesis choice above. The dashed line marks the switch from the historical run to SSP5-8.5 in 2015. The dark line is IMD.</p>
+  </section>
+  <section>
+    <h3>Change through the century</h3>
+    <div class="tw"><table class="num" id="ct-trend"></table></div>
+    <p class="small" id="ct-trend-cap"></p>
+  </section>
+</div>
+
+<!-- 6 MAPS -->
+<div class="view" id="v-maps" hidden>
+  <section>
+    <h2>CMIP6 track maps</h2>
+    <p class="prose">Where do the model storms form and travel? Pick a model on the left and compare it with IMD or another model on the right, for any years and months.</p>
+    <div class="panel">
+      <div class="controls">
+        <div class="ctl"><label for="mp-a">Left map</label><select id="mp-a"></select></div>
+        <div class="ctl"><label for="mp-b">Right map</label><select id="mp-b"></select></div>
+        <div class="ctl"><span class="lab">Tracker</span><div class="seg" id="mp-det"><button data-v="uz" aria-pressed="true">UZ</button><button data-v="owz" aria-pressed="false">OWZ</button></div></div>
+        <div class="ctl"><span class="lab">Genesis</span><div class="seg" id="mp-oc"><button data-v="1" aria-pressed="false">Over sea</button><button data-v="0" aria-pressed="true">All tracks</button></div></div>
+        <div class="ctl"><span class="lab">Show</span><div class="seg" id="mp-show"><button data-v="tracks" aria-pressed="true">Tracks</button><button data-v="gen" aria-pressed="false">Genesis</button><button data-v="dens" aria-pressed="false">Density</button></div></div>
+      </div>
+      <div class="controls">
+        <div class="ctl"><label for="mp-y0">From</label><input type="number" id="mp-y0" min="1950" max="2050" value="1982"></div>
+        <div class="ctl"><label for="mp-y1">To</label><input type="number" id="mp-y1" min="1950" max="2050" value="2014"></div>
+        <div class="ctl"><span class="lab">Months</span><div class="chips" id="mp-months"></div></div>
+      </div>
+      <div class="two">
+        <div><div class="plot" id="mp-left" style="height:470px"></div><p class="small" id="mp-left-t"></p></div>
+        <div><div class="plot" id="mp-right" style="height:470px"></div><p class="small" id="mp-right-t"></p></div>
+      </div>
+      <p class="cap"><b>Figure 8. Model storms against IMD.</b> Tracks: each line is one storm, coloured by its peak wind (grey below 34 kt, blue 34–63 kt, red 64 kt and above; 850 hPa for models, surface for IMD). Genesis: first point of each track. Density: storm-days per year in 150 km boxes. Many tracks in CNRM-CM6-1-HR and HadGEM3-GC31-MM begin over land (the Ganges plain, Bangladesh, north-west India and Pakistan); these are monsoon lows and heat lows, which "Over sea" removes.</p>
+    </div>
+  </section>
+</div>
+
+<!-- 7 INTENSITY -->
+<div class="view" id="v-intensity" hidden>
+  <section>
+    <h2>CMIP6 intensity and RI</h2>
+    <p class="prose">How strong do model storms get, and how fast do they intensify? Model wind is the daily-mean 850 hPa wind, so model values are an upper bound on how weak the storms are compared with IMD's surface wind.</p>
+    <div class="panel">
+      <div class="controls">
+        <div class="ctl"><span class="lab">Tracker</span><div class="seg" id="in-det"><button data-v="uz" aria-pressed="true">UZ</button><button data-v="owz" aria-pressed="false">OWZ</button></div></div>
+        <div class="ctl"><span class="lab">Genesis</span><div class="seg" id="in-oc"><button data-v="1" aria-pressed="true">Over sea</button><button data-v="0" aria-pressed="false">All tracks</button></div></div>
+        <div class="ctl"><span class="lab">Quantity</span><div class="seg" id="in-q"><button data-v="v" aria-pressed="true">Peak wind</button><button data-v="p" aria-pressed="false">Min pressure</button><button data-v="dv" aria-pressed="false">Max ΔV24</button><button data-v="dy" aria-pressed="false">Duration</button></div></div>
+        <div class="ctl"><label for="in-y0">From</label><input type="number" id="in-y0" min="1950" max="2050" value="1950"></div>
+        <div class="ctl"><label for="in-y1">To</label><input type="number" id="in-y1" min="1950" max="2050" value="2050"></div>
+      </div>
+      <div class="plot" id="in-box" style="height:440px"></div>
+      <p class="cap" id="in-box-cap"></p>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="controls">
+      <div class="ctl"><label for="in-thr">24-h wind increase threshold</label><div style="display:flex;gap:10px;align-items:center"><input type="range" id="in-thr" min="5" max="40" step="1" value="30"><span class="val" id="in-thr-v"></span></div></div>
+    </div>
+    <div class="plot" id="in-ri" style="height:360px"></div>
+    <p class="cap" id="in-ri-cap"></p>
+  </section>
+  <section class="panel">
+    <div class="controls"><div class="ctl"><span class="lab">Models (up to 6)</span><div class="chips" id="se-models"></div></div></div>
+    <div class="plot" id="se-plot" style="height:380px"></div>
+    <p class="cap"><b>Figure 11. Seasonal cycle of genesis</b> for the tracker, genesis and period chosen above, as the share of each model's storms that form in each month. IMD cyclonic storms (dark) peak in May and in October–November, either side of the summer monsoon.</p>
+  </section>
+</div>
+
+<!-- 8 LIMITS -->
+<div class="view" id="v-limits" hidden>
+  <section>
+    <h2>Limitations</h2>
+    <ul class="prose">
+      <li>CMIP6 data are daily means on 0.5–2.5° grids, so cyclone cores of 20–50 km and 6-hour RI bursts cannot be resolved. A daily ΔV24 also smooths the 3-hourly IMD changes.</li>
+      <li>ERA5 at 0.25° underestimates the peak wind of intense storms, most of all for RI storms, so ERA5 cannot be used to label RI with the IMD 30 kt rule without correction.</li>
+      <li>One ensemble member per model. Counts of 0.1–1 storms per year over 33 years carry large sampling error, and trends need more members.</li>
+      <li>The detection thresholds are one preset for all models and were not tuned per model. Tuning would change the counts but not the intensity gap.</li>
+      <li>CMIP6 wind is the 850 hPa wind, not the surface wind IMD reports.</li>
+      <li>Land or ocean genesis is judged from the first track point against the Natural Earth 50 m coastline.</li>
+      <li>CMIP7 is not used: its daily pressure-level output is not yet broadly published on Pangeo or ESGF.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Next steps</h2>
+    <ul class="prose">
+      <li>Repeat the CMIP6 analysis with 6-hourly output (6hrPlevPt) or HighResMIP runs at 25–50 km for the three models that come closest to IMD (CNRM-CM6-1-HR, HadGEM3-GC31-MM, EC-Earth3).</li>
+      <li>Bias-correct ERA5 intensity against IMD (for example quantile mapping by storm intensity class) before using it to label RI.</li>
+      <li>Use the ERA5 timing signal: ERA5's largest ΔV24 falls within 24 h of the IMD RI onset for most RI storms, which makes ERA5 environmental fields usable as predictors for the RI prediction model.</li>
+      <li>Add more ensemble members for the best models to separate trend from sampling noise.</li>
+      <li>Merge these results into the intensity-prediction report.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Code and outputs</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Step</th><th>Script</th><th>Output</th></tr></thead>
+      <tbody>
+        <tr><td>IMD best track</td><td><code>ibtracs.py</code></td><td>data/ibtracs.NI.list.v04r01.csv</td></tr>
+        <tr><td>ERA5 download (28 storms)</td><td><code>era5_download.py</code></td><td>&lt;storm&gt;_3.nc, &lt;storm&gt;_slp.nc</td></tr>
+        <tr><td>ERA5 tracking and validation</td><td><code>era5_validate.py</code>, <code>track_lib.py</code>, <code>intensity.py</code></td><td>results/era5/</td></tr>
+        <tr><td>CMIP6 regional subset (Colab)</td><td><code>cmip6_subset.py</code>, <code>cmip6_track.py</code></td><td>subset/&lt;model&gt;/ (12 × 101 yearly files)</td></tr>
+        <tr><td>CMIP6 tracking</td><td><code>cmip6_local.py</code></td><td>results/cmip6/&lt;model&gt;.pkl</td></tr>
+        <tr><td>CMIP6 tables and figures</td><td><code>cmip6_report.py</code>, <code>cmip6_analysis.py</code></td><td>results/cmip6/figs/</td></tr>
+        <tr><td>This website</td><td><code>web/export_data.py</code></td><td>web/data.json, web/index.html</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+</div>
+</main>
+<footer class="wrap small">IMD best track from IBTrACS v04r01 (NOAA NCEI). ERA5 from the Copernicus Climate Change Service. CMIP6 from the Pangeo CMIP6 cloud archive. Coastlines from Natural Earth.</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.34.0/plotly.min.js"></script>
+<script>
+"use strict";
+let D = null;
+const KT_RI = 30;
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const $ = id => document.getElementById(id);
+const fmt = (x, d = 1) => (x === null || x === undefined || Number.isNaN(x)) ? "–" : Number(x).toFixed(d);
+const mean = a => { const b = a.filter(x => x !== null && !Number.isNaN(x)); return b.length ? b.reduce((s, x) => s + x, 0) / b.length : NaN; };
+const median = a => { const b = a.filter(x => x !== null && !Number.isNaN(x)).sort((x, y) => x - y); if (!b.length) return NaN; const m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+const title = s => s.charAt(0).toUpperCase() + s.slice(1);
+const PALETTE_L = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"];
+const PALETTE_D = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300"];
+const isDark = () => css("--bg").toLowerCase() === "#0e151b";
+const pal = () => isDark() ? PALETTE_D : PALETTE_L;
+const CFG = { displaylogo: false, responsive: true, modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"] };
+
+function merge(a, b) {
+  for (const k in b) {
+    if (b[k] && typeof b[k] === "object" && !Array.isArray(b[k]) && a[k] && typeof a[k] === "object") merge(a[k], b[k]);
+    else a[k] = b[k];
+  }
+  return a;
+}
+function axis() { return { gridcolor: css("--grid"), linecolor: css("--line"), zerolinecolor: css("--line"), tickfont: { family: css("--f-mono"), size: 11 } }; }
+function layout(extra) {
+  return merge({
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: { family: css("--f-body"), color: css("--fg"), size: 12 },
+    margin: { l: 56, r: 14, t: 34, b: 46 }, xaxis: axis(), yaxis: axis(),
+    legend: { orientation: "h", x: 0, y: 1.02, yanchor: "bottom", bgcolor: "rgba(0,0,0,0)" },
+    hoverlabel: { bgcolor: css("--surface"), bordercolor: css("--line"), font: { color: css("--fg"), family: css("--f-body") } },
+    title: { font: { size: 13, family: css("--f-body") }, x: 0, xanchor: "left", y: 0.99, yanchor: "top" },
+  }, extra || {});
+}
+function plot(id, traces, lay) { Plotly.react($(id), traces, layout(lay), CFG); }
+
+/* ---------- maps drawn on plain axes (no tile/topojson downloads) ---------- */
+function coastTrace() {
+  return { x: D.coast.x, y: D.coast.y, mode: "lines", fill: "toself", fillcolor: css("--land"),
+           line: { color: css("--coast"), width: 0.7 }, hoverinfo: "skip", showlegend: false };
+}
+function mapLayout(box, extra) {
+  const ax = axis();
+  return merge({
+    margin: { l: 44, r: 10, t: 34, b: 36 }, plot_bgcolor: css("--sea"),
+    xaxis: merge(ax, { range: [box[0], box[1]], ticksuffix: "°E", showgrid: true, constrain: "domain" }),
+    yaxis: merge(axis(), { range: [box[2], box[3]], ticksuffix: "°N", scaleanchor: "x", scaleratio: 1, showgrid: true }),
+  }, extra || {});
+}
+
+/* ---------- small UI helpers ---------- */
+function seg(id, onChange) {
+  const el = $(id);
+  el.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (el.dataset.momentary !== undefined) { onChange(b.dataset.v); return; }
+    el.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+    onChange(b.dataset.v);
+  });
+}
+const segVal = id => $(id).querySelector('button[aria-pressed="true"]').dataset.v;
+function clampYears(a, b) {
+  let y0 = Math.max(1950, Math.min(2050, +$(a).value || 1950)), y1 = Math.max(1950, Math.min(2050, +$(b).value || 2050));
+  if (y1 < y0) [y0, y1] = [y1, y0];
+  return [y0, y1];
+}
+function sortableTable(el, head, rows, opts = {}) {
+  // head: [{k, label, d}] ; rows: objects ; opts.rowClass(r), opts.cell(k, r)
+  let key = opts.sortKey || null, dir = opts.sortDir || "desc";
+  function draw() {
+    let rs = rows.slice();
+    if (key) rs.sort((a, b) => {
+      const x = a[key], y = b[key];
+      if (x === y) return 0; if (x === null || x === undefined || Number.isNaN(x)) return 1; if (y === null || y === undefined || Number.isNaN(y)) return -1;
+      return (x < y ? -1 : 1) * (dir === "asc" ? 1 : -1);
+    });
+    if (opts.pinBottom) rs = rs.filter(r => !opts.pinBottom(r)).concat(rows.filter(opts.pinBottom));
+    el.innerHTML = "<thead><tr>" + head.map(h => `<th class="sort" data-k="${h.k}"${h.k === key ? ` data-dir="${dir}"` : ""}>${h.label}</th>`).join("") + "</tr></thead><tbody>" +
+      rs.map(r => `<tr${opts.rowClass && opts.rowClass(r) ? ` class="${opts.rowClass(r)}"` : ""}>` + head.map(h => `<td>${opts.cell ? opts.cell(h, r) : (typeof r[h.k] === "number" ? fmt(r[h.k], h.d ?? 1) : (r[h.k] ?? "–"))}</td>`).join("") + "</tr>").join("") + "</tbody>";
+  }
+  el.addEventListener("click", e => {
+    const th = e.target.closest("th.sort"); if (!th) return;
+    if (key === th.dataset.k) dir = dir === "asc" ? "desc" : "asc"; else { key = th.dataset.k; dir = "desc"; }
+    draw();
+  });
+  draw();
+}
+function modelPicker(id, defaults, onChange) {
+  const el = $(id); const sel = new Map();         // model -> palette slot; colour stays with the model while selected
+  defaults.forEach((m, i) => sel.set(m, i));
+  function draw() {
+    const p = pal();
+    el.innerHTML = D.cmip6.map(m => {
+      const on = sel.has(m.name);
+      return `<button class="chip" data-m="${m.name}" aria-pressed="${on}"><i style="background:${on ? p[sel.get(m.name)] : "var(--line)"}"></i>${m.name}</button>`;
+    }).join("");
+  }
+  el.addEventListener("click", e => {
+    const b = e.target.closest(".chip"); if (!b) return;
+    const m = b.dataset.m;
+    if (sel.has(m)) sel.delete(m);
+    else { const used = new Set(sel.values()); const free = [0, 1, 2, 3, 4, 5].find(i => !used.has(i)); if (free === undefined) return; sel.set(m, free); }
+    draw(); onChange();
+  });
+  draw();
+  return { get: () => [...sel.entries()], redraw: draw };
+}
+
+/* ---------- derived CMIP6 helpers ---------- */
+const MODEL = name => D.cmip6.find(m => m.name === name);
+function tracksOf(m, det, ocean, y0, y1, months) {
+  const t = m[det], out = [];
+  for (let i = 0; i < t.y.length; i++) {
+    if (t.y[i] < y0 || t.y[i] > y1) continue;
+    if (ocean && !t.oc[i]) continue;
+    if (months && !months.has(t.mo[i])) continue;
+    out.push(i);
+  }
+  return out;
+}
+function modelYears(m, det, y0, y1) { return (det === "owz" ? m.owz_years : m.years).filter(y => y >= y0 && y <= y1); }
+function imdIdx(y0, y1, minKt, months) {
+  const I = D.imd, out = [];
+  for (let i = 0; i < I.y.length; i++) {
+    if (I.y[i] < y0 || I.y[i] > y1 || I.v[i] === null || I.v[i] < minKt) continue;
+    if (months && !months.has(I.mo[i])) continue;
+    out.push(i);
+  }
+  return out;
+}
+function imdYears(y0, y1) { const a = Math.max(y0, 1982), b = Math.min(y1, 2023); return b >= a ? b - a + 1 : 0; }
+function linfit(xs, ys) { const n = xs.length; if (n < 3) return NaN; const mx = mean(xs), my = mean(ys); let sxy = 0, sxx = 0; xs.forEach((x, i) => { sxy += (x - mx) * (ys[i] - my); sxx += (x - mx) ** 2; }); return sxx ? sxy / sxx : NaN; }
+function running(ys, w) { if (w <= 1) return ys.slice(); const h = (w - 1) / 2; return ys.map((_, i) => { const s = ys.slice(Math.max(0, i - h), Math.min(ys.length, i + h + 1)); return s.length >= Math.ceil(w / 2) ? mean(s) : null; }); }
+
+/* =================== 1 OVERVIEW =================== */
+function renderOverview() {
+  const E = D.era5, ri = E.filter(s => s.type === "RI"), nri = E.filter(s => s.type === "NRI");
+  const ratio = g => mean(g.map(s => s.m.era5_peak / s.m.imd_peak));
+  const cu = D.tables.counts_vs_imd_uz, co = D.tables.counts_vs_imd_owz;
+  const g = (t, k) => (t.find(r => r.source === k) || {}).per_year;
+  const nRI = D.tables.ri_uz.reduce((s, r) => s + (r.RI_abs_30kt || 0), 0);
+  const within = ri.filter(s => s.m.lag !== null && Math.abs(s.m.lag) <= 24).length;
+  const maxdv = E.reduce((a, s) => s.m.era5_dv24 > a.m.era5_dv24 ? s : a);
+  $("ov-stats").innerHTML = [
+    [E.length, `storms analysed with ERA5 (${ri.length} RI, ${nri.length} NRI)`],
+    [`${fmt(mean(E.map(s => s.m.uz_err)), 0)} km`, "mean UZ track error against IMD"],
+    [`${fmt(ratio(ri) * 100, 0)}%`, "ERA5 peak wind as share of IMD peak, RI storms"],
+    ["1,212", "CMIP6 model-years tracked (12 models × 101 years)"],
+    [fmt(g(cu, "IMD depression+"), 1), "IMD depressions per year, 1982–2014"],
+    [nRI, "CMIP6 ocean tracks reaching the 30 kt RI rule (UZ)"],
+  ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join("");
+  const low = D.tables.counts_vs_imd_uz.filter(r => !r.source.startsWith("IMD") && r.per_year < 1).length;
+  $("ov-findings").innerHTML = [
+    `<b>ERA5 tracks the storms well.</b> The UZ track error is ${fmt(mean(E.map(s => s.m.uz_err)), 0)} km on average (median ${fmt(median(E.map(s => s.m.uz_err)), 0)} km), about two ERA5 grid boxes. OWZ averages ${fmt(mean(E.map(s => s.m.owz_err)), 0)} km because in a few storms (Yaas, Mora) it follows a neighbouring vortex.`,
+    `<b>ERA5 underestimates intensity, much more for RI storms.</b> ERA5 peak 10 m wind is ${fmt(ratio(ri) * 100, 0)}% of the IMD peak for RI storms and ${fmt(ratio(nri) * 100, 0)}% for NRI storms. The wind bias along the track is ${fmt(mean(ri.map(s => s.m.v_bias)), 1)} kt for RI and ${fmt(mean(nri.map(s => s.m.v_bias)), 1)} kt for NRI storms, but the evolution is right (correlation ${fmt(mean(E.map(s => s.m.v_r)), 2)}).`,
+    `<b>ERA5 does not reach the IMD RI rule but carries the timing.</b> No storm reaches a 30 kt increase in 24 h; the largest is ${fmt(maxdv.m.era5_dv24, 0)} kt (${title(maxdv.name)}). A relative threshold (90th percentile) flags Amphan, Fani and Mocha, all RI, with no false alarms, and ERA5's largest increase falls within 24 h of the IMD RI onset for ${within} of ${ri.length} RI storms.`,
+    `<b>Most CMIP6 models make far fewer storms than IMD.</b> IMD records ${fmt(g(cu, "IMD depression+"), 1)} depressions and ${fmt(g(cu, "IMD cyclonic storm+"), 1)} cyclonic storms per year in 1982–2014. With UZ and counting only storms that form over the sea, ${low} of 12 models give under one storm per year. CNRM-CM6-1-HR (${fmt(g(cu, "CNRM-CM6-1-HR"), 1)}) and HadGEM3-GC31-MM (${fmt(g(cu, "HadGEM3-GC31-MM"), 1)}) come closest; with OWZ, HadGEM3 (${fmt(g(co, "HadGEM3-GC31-MM"), 1)}) and EC-Earth3 (${fmt(g(co, "EC-Earth3"), 1)}). These have the finest grids; the 1.25–2.5° models find almost nothing.`,
+    `<b>CMIP6 almost never produces RI.</b> ${nRI} ocean UZ tracks in 1,212 model-years reach a daily 30 kt increase, both in CNRM-CM6-1-HR. Most model increases are below 15 kt, and the lowest model pressure is about 969 hPa against below 940 hPa in strong IMD storms.`,
+    `<b>No clear change to 2050.</b> Trends in storm counts are small and of mixed sign across models (about ±0.1 storms per year per decade), well inside the year-to-year noise.`,
+  ].map(x => `<li>${x}</li>`).join("");
+  const tr = E.map(s => ({
+    x: s.imd.lon, y: s.imd.lat, mode: "lines", name: `${title(s.name)} ${s.year}`, showlegend: false,
+    line: { color: s.type === "RI" ? css("--ri") : css("--nri"), width: s.type === "RI" ? 2 : 1.4 },
+    text: s.imd.t.map((t, i) => `<b>${title(s.name)} ${s.year}</b> (${s.type}, ${s.cat})<br>${t}<br>${fmt(s.imd.v[i], 0)} kt, ${fmt(s.imd.p[i], 0)} hPa`),
+    hovertemplate: "%{text}<extra></extra>",
+  }));
+  const leg = ["RI", "NRI"].map(t => ({ x: [null], y: [null], mode: "lines", name: t === "RI" ? "RI storm" : "NRI storm", line: { color: css(t === "RI" ? "--ri" : "--nri"), width: 2 } }));
+  plot("ov-map", [coastTrace(), ...tr, ...leg], mapLayout([60, 100, 4, 27]));
+}
+
+/* =================== 2 METHODS: model table =================== */
+function renderMethods() {
+  const cu = D.tables.counts_vs_imd_uz;
+  const head = [{ k: "name", label: "Model" }, { k: "grid", label: "Grid (° lat × lon)" }, { k: "zarr_gb", label: "Zarr GB", d: 0 },
+                { k: "years", label: "Years", d: 0 }, { k: "owz", label: "OWZ years", d: 0 }, { k: "uz_n", label: "UZ tracks", d: 0 }, { k: "owz_n", label: "OWZ tracks", d: 0 }];
+  const rows = D.cmip6.map(m => ({ name: m.name, grid: m.grid, zarr_gb: m.zarr_gb, years: m.years.length, owz: m.owz_years.length, uz_n: m.uz.y.length, owz_n: m.owz.y.length }));
+  sortableTable($("model-table"), head, rows, { sortKey: "uz_n" });
+}
+
+/* =================== 3 STORM EXPLORER =================== */
+let curStorm = "amphan";
+function renderStormList() {
+  const f = segVal("st-filter");
+  const list = D.era5.filter(s => f === "all" || s.type === f).slice().sort((a, b) => b.type.localeCompare(a.type) || b.m.imd_peak - a.m.imd_peak);
+  $("st-list").innerHTML = list.map(s => `<button data-s="${s.name}" aria-current="${s.name === curStorm}"><span>${title(s.name)} <small>${s.year}</small></span><span class="pill ${s.type.toLowerCase()}">${s.type}</span></button>`).join("");
+}
+function dv24(times, vals) {
+  const ts = times.map(t => Date.parse(t.replace(" ", "T") + ":00Z")), out = [];
+  for (let i = 0; i < ts.length; i++) {
+    const j = ts.indexOf(ts[i] - 864e5);
+    out.push(j >= 0 && vals[i] !== null && vals[j] !== null ? vals[i] - vals[j] : null);
+  }
+  return out;
+}
+function renderStorm() {
+  const s = D.era5.find(x => x.name === curStorm), m = s.m;
+  $("st-title").innerHTML = `${title(s.name)} ${s.year} <span class="pill ${s.type.toLowerCase()}">${s.type}</span> <span class="small">${s.cat}</span>`;
+  const ratio = m.era5_peak / m.imd_peak;
+  let txt = `IMD peak ${fmt(m.imd_peak, 0)} kt and ${fmt(m.imd_pmin, 0)} hPa; ERA5 reaches ${fmt(m.era5_peak, 0)} kt (${fmt(ratio * 100, 0)}% of IMD) and ${fmt(m.era5_pmin, 0)} hPa. `;
+  txt += m.uz_err === null ? `UZ found no track for this storm; OWZ follows it with a ${fmt(m.owz_err, 0)} km mean error. ` :
+    `The UZ track lies ${fmt(m.uz_err, 0)} km and the OWZ track ${fmt(m.owz_err, 0)} km from the IMD fixes on average. `;
+  txt += `The largest 24-h wind increase is ${fmt(m.imd_dv24, 0)} kt in IMD and ${fmt(m.era5_dv24, 0)} kt in ERA5`;
+  txt += s.type === "RI" && m.lag !== null ? `; ERA5's largest increase comes ${Math.abs(m.lag)} h ${m.lag < 0 ? "before" : m.lag > 0 ? "after" : "at"} the IMD RI onset${m.lag === 0 ? "" : ""}.` : ".";
+  $("st-text").textContent = txt;
+  $("st-kv").innerHTML = [["UZ error", `${fmt(m.uz_err, 0)} km`], ["OWZ error", `${fmt(m.owz_err, 0)} km`], ["Wind bias", `${fmt(m.v_bias, 1)} kt`],
+    ["Wind RMSE", `${fmt(m.v_rmse, 1)} kt`], ["Wind r", fmt(m.v_r, 2)], ["Pressure bias", `${m.p_bias > 0 ? "+" : ""}${fmt(m.p_bias, 1)} hPa`],
+    ["ΔV24 IMD / ERA5", `${fmt(m.imd_dv24, 0)} / ${fmt(m.era5_dv24, 0)} kt`], ["RI timing", s.type === "RI" && m.lag !== null ? `${m.lag > 0 ? "+" : ""}${m.lag} h` : "–"]]
+    .map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join("");
+  const imdTxt = s.imd.t.map((t, i) => `IMD ${t}<br>${fmt(s.imd.v[i], 0)} kt, ${fmt(s.imd.p[i], 0)} hPa`);
+  const ln = (pts, name, col, dash) => pts.length ? { x: pts.map(p => p[1]), y: pts.map(p => p[0]), mode: "lines+markers", name, line: { color: col, width: 2, dash }, marker: { size: 5 }, hovertemplate: `${name}<br>%{y:.2f}°N %{x:.2f}°E<extra></extra>` } : { x: [null], y: [null], mode: "lines", name: name + " (none)", line: { color: col } };
+  const ex = s.extent, pad = 1;
+  plot("st-map", [coastTrace(),
+    { x: s.imd.lon, y: s.imd.lat, mode: "lines+markers", name: "IMD best track", line: { color: css("--imd"), width: 2.4 }, marker: { size: 6, color: s.imd.v, colorscale: [[0, css("--nri")], [1, css("--ri")]], cmin: 20, cmax: 130, line: { color: css("--surface"), width: 1 } }, text: imdTxt, hovertemplate: "%{text}<extra></extra>" },
+    ln(s.uz, "ERA5 UZ", css("--uz")), ln(s.owz, "ERA5 OWZ", css("--owz"))],
+    mapLayout([ex[0] + pad, ex[1] - pad, ex[2] + pad, ex[3] - pad]));
+  const dvI = dv24(s.imd.t, s.imd.v), dvE = dv24(s.era5.t, s.era5.v);
+  const shapes = [{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y3", y0: KT_RI, y1: KT_RI, line: { color: css("--muted"), dash: "dash", width: 1 } }];
+  if (s.ri_start) shapes.push({ type: "rect", xref: "x", yref: "paper", x0: s.ri_start, x1: s.ri_end, y0: 0, y1: 1, fillcolor: css("--ri"), opacity: 0.1, line: { width: 0 } });
+  const tl = (x, y, name, col, ya, show) => ({ x, y, name, mode: "lines+markers", marker: { size: 4 }, line: { color: col, width: 2 }, yaxis: ya, showlegend: show, legendgroup: name, connectgaps: false });
+  plot("st-int", [
+    tl(s.imd.t, s.imd.v, "IMD", css("--imd"), "y", true), tl(s.era5.t, s.era5.v, "ERA5", css("--owz"), "y", true),
+    tl(s.imd.t, s.imd.p, "IMD", css("--imd"), "y2", false), tl(s.era5.t, s.era5.p, "ERA5", css("--owz"), "y2", false),
+    tl(s.imd.t, dvI, "IMD", css("--imd"), "y3", false), tl(s.era5.t, dvE, "ERA5", css("--owz"), "y3", false)],
+    { grid: { rows: 3, columns: 1, pattern: "coupled", roworder: "top to bottom" }, shapes, hovermode: "x unified",
+      yaxis: { title: { text: "wind (kt)" } }, yaxis2: merge(axis(), { title: { text: "pressure (hPa)" } }), yaxis3: merge(axis(), { title: { text: "ΔV24 (kt)" } }),
+      xaxis: { type: "date" }, margin: { l: 60 } });
+}
+
+/* =================== 4 ERA5 SKILL =================== */
+function renderSkill() {
+  const E = D.era5, g = { RI: E.filter(s => s.type === "RI"), NRI: E.filter(s => s.type === "NRI") };
+  const row = (lab, f, d = 1) => `<tr><td>${lab}</td><td>${fmt(f(g.RI), d)}</td><td>${fmt(f(g.NRI), d)}</td><td>${fmt(f(E), d)}</td></tr>`;
+  const mk = k => a => mean(a.map(s => s.m[k]));
+  $("sk-summary").innerHTML = `<thead><tr><th></th><th>RI (n=${g.RI.length})</th><th>NRI (n=${g.NRI.length})</th><th>All (n=${E.length})</th></tr></thead><tbody>` +
+    row("UZ track error, mean (km)", mk("uz_err"), 0) + row("OWZ track error, mean (km)", mk("owz_err"), 0) +
+    row("IMD peak wind (kt)", mk("imd_peak"), 0) + row("ERA5 peak 10 m wind (kt)", mk("era5_peak"), 0) +
+    row("ERA5 / IMD peak ratio", a => mean(a.map(s => s.m.era5_peak / s.m.imd_peak)), 2) +
+    row("Wind bias along IMD track (kt)", mk("v_bias")) + row("Wind RMSE (kt)", mk("v_rmse")) + row("Wind correlation r", mk("v_r"), 2) +
+    row("Pressure bias (hPa)", mk("p_bias")) + row("IMD max ΔV24 (kt)", mk("imd_dv24"), 0) + row("ERA5 max ΔV24 (kt)", mk("era5_dv24")) + "</tbody>";
+  drawDumbbell(); drawScatter(); drawRI();
+  const head = [{ k: "name", label: "Storm" }, { k: "type", label: "Type" }, { k: "cat", label: "IMD cat." }, { k: "year", label: "Year", d: 0 },
+    { k: "uz_err", label: "UZ err km", d: 0 }, { k: "owz_err", label: "OWZ err km", d: 0 }, { k: "imd_peak", label: "IMD peak kt", d: 0 }, { k: "era5_peak", label: "ERA5 peak kt", d: 0 },
+    { k: "v_bias", label: "Wind bias kt", d: 1 }, { k: "v_r", label: "r", d: 2 }, { k: "imd_pmin", label: "IMD pmin", d: 0 }, { k: "era5_pmin", label: "ERA5 pmin", d: 0 },
+    { k: "imd_dv24", label: "IMD ΔV24", d: 0 }, { k: "era5_dv24", label: "ERA5 ΔV24", d: 1 }, { k: "lag", label: "Timing h", d: 0 }];
+  const rows = E.map(s => Object.assign({ name: s.name, type: s.type, cat: s.cat, year: s.year }, s.m));
+  sortableTable($("sk-table"), head, rows, { sortKey: "imd_peak", cell: (h, r) => h.k === "name" ? title(r.name) : h.k === "type" ? `<span class="pill ${r.type.toLowerCase()}">${r.type}</span>` : typeof r[h.k] === "number" ? fmt(r[h.k], h.d ?? 1) : (r[h.k] ?? "–") });
+}
+const METRIC = {
+  peak: { a: "imd_peak", b: "era5_peak", la: "IMD", lb: "ERA5", x: "peak wind (kt)", cap: "<b>Figure 3. Peak wind, IMD against ERA5.</b> One row per storm, RI storms on top. ERA5 is weaker for every storm, and the gap grows with storm strength: the six strongest storms (Sidr, Giri, Phailin, Amphan, Fani, Mocha) lose 50–70 kt." },
+  dv: { a: "imd_dv24", b: "era5_dv24", la: "IMD", lb: "ERA5", x: "largest 24-h wind increase (kt)", line: 30, cap: "<b>Figure 3. Largest 24-h wind increase.</b> The dashed line is the IMD RI threshold (30 kt). Every RI storm reaches it in IMD; no storm reaches it in ERA5, whose largest increase is 23 kt (Amphan)." },
+  pmin: { a: "imd_pmin", b: "era5_pmin", la: "IMD", lb: "ERA5", x: "minimum pressure (hPa)", cap: "<b>Figure 3. Minimum central pressure.</b> ERA5 is too high (too weak) for intense storms, by up to 42 hPa for Sidr, and close to IMD for weaker storms." },
+  err: { a: "uz_err", b: "owz_err", la: "UZ", lb: "OWZ", x: "mean track error (km)", cap: "<b>Figure 3. Mean track error against IMD</b> for the two trackers. UZ stays within 28–81 km for every storm it tracks; OWZ has a few large errors where it follows a neighbouring vortex (Yaas, Mora, Phethai)." },
+};
+function drawDumbbell() {
+  const M = METRIC[segVal("sk-metric")];
+  const order = ["NRI", "RI"].flatMap(t => D.era5.filter(s => s.type === t).sort((a, b) => (a.m[M.a] ?? 0) - (b.m[M.a] ?? 0)));
+  const y = order.map(s => `${title(s.name)} (${s.type})`);
+  const cA = M.la === "UZ" ? css("--uz") : css("--imd"), cB = css("--owz");
+  const lx = [], ly = [];
+  order.forEach((s, i) => { if (s.m[M.a] !== null && s.m[M.b] !== null) { lx.push(s.m[M.a], s.m[M.b], null); ly.push(y[i], y[i], null); } });
+  const shapes = M.line ? [{ type: "line", x0: M.line, x1: M.line, yref: "paper", y0: 0, y1: 1, line: { dash: "dash", color: css("--muted"), width: 1 } }] : [];
+  const nN = order.filter(s => s.type === "NRI").length;
+  shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, y0: nN - 0.5, y1: nN - 0.5, line: { color: css("--line"), width: 1 } });
+  plot("sk-dumb", [
+    { x: lx, y: ly, mode: "lines", line: { color: css("--line"), width: 3 }, hoverinfo: "skip", showlegend: false },
+    { x: order.map(s => s.m[M.a]), y, mode: "markers", name: M.la, marker: { size: 10, color: cA, line: { color: css("--surface"), width: 1.5 } }, hovertemplate: `%{y}<br>${M.la}: %{x:.1f}<extra></extra>` },
+    { x: order.map(s => s.m[M.b]), y, mode: "markers", name: M.lb, marker: { size: 10, color: cB, line: { color: css("--surface"), width: 1.5 } }, hovertemplate: `%{y}<br>${M.lb}: %{x:.1f}<extra></extra>` }],
+    { shapes, margin: { l: 130 }, xaxis: { title: { text: M.x } }, yaxis: { type: "category", automargin: true, tickfont: { family: css("--f-body"), size: 12 } }, hovermode: "closest",
+      annotations: [{ xref: "paper", x: 1, y: nN + 0.0, yanchor: "bottom", text: "RI storms ↑", showarrow: false, font: { color: css("--ri"), size: 11 } }, { xref: "paper", x: 1, y: nN - 1, yanchor: "top", text: "NRI storms ↓", showarrow: false, font: { color: css("--nri"), size: 11 } }] });
+  $("sk-dumb-cap").innerHTML = M.cap;
+}
+function drawScatter() {
+  const tr = ["RI", "NRI"].map(t => {
+    const g = D.era5.filter(s => s.type === t);
+    return { x: g.map(s => s.m.imd_peak), y: g.map(s => s.m.era5_peak), mode: "markers", name: t, text: g.map(s => title(s.name)),
+             marker: { size: 10, color: css(t === "RI" ? "--ri" : "--nri"), line: { color: css("--surface"), width: 1.5 } }, hovertemplate: "%{text}<br>IMD %{x:.0f} kt, ERA5 %{y:.0f} kt<extra></extra>" };
+  });
+  const xs = D.era5.map(s => s.m.imd_peak), ys = D.era5.map(s => s.m.era5_peak), b = linfit(xs, ys), a = mean(ys) - b * mean(xs);
+  tr.push({ x: [0, 140], y: [0, 140], mode: "lines", name: "1:1", line: { color: css("--muted"), dash: "dot", width: 1 }, hoverinfo: "skip" });
+  tr.push({ x: [40, 135], y: [a + b * 40, a + b * 135], mode: "lines", name: "fit", line: { color: css("--accent"), width: 1.5 }, hoverinfo: "skip" });
+  plot("sk-scatter", tr, { xaxis: { title: { text: "IMD peak wind (kt)" }, range: [30, 140] }, yaxis: { title: { text: "ERA5 peak 10 m wind (kt)" }, range: [20, 140] } });
+  $("sk-scatter-cap").innerHTML = `<b>Figure 4. Peak wind, ERA5 against IMD.</b> The dotted line is perfect agreement; the blue line is the least-squares fit, ERA5 = ${fmt(a, 0)} + ${fmt(b, 2)} × IMD. ERA5 gains only about ${fmt(b * 10, 1)} kt for each 10 kt of IMD intensity, so the shortfall grows for stronger storms.`;
+}
+function drawRI() {
+  const thr = +$("sk-thr").value; $("sk-thr-v").textContent = `${thr.toFixed(1)} kt`;
+  const E = D.era5, hit = E.filter(s => s.type === "RI" && s.m.era5_dv24 >= thr).length, miss = E.filter(s => s.type === "RI").length - hit;
+  const fa = E.filter(s => s.type === "NRI" && s.m.era5_dv24 >= thr).length, cn = E.filter(s => s.type === "NRI").length - fa;
+  const pod = hit / (hit + miss), far = hit + fa ? fa / (hit + fa) : NaN;
+  $("sk-conf").innerHTML = [[hit, "RI caught"], [miss, "RI missed"], [fa, "false alarms"], [`${fmt(pod * 100, 0)}% / ${Number.isNaN(far) ? "–" : fmt(far * 100, 0) + "%"}`, "POD / FAR"]].map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join("");
+  const tr = ["RI", "NRI"].map(t => { const g = E.filter(s => s.type === t); return { x: g.map(s => s.m.era5_dv24), y: g.map(() => t), mode: "markers", name: t, text: g.map(s => title(s.name)), marker: { size: 12, color: css(t === "RI" ? "--ri" : "--nri"), opacity: 0.85, line: { color: css("--surface"), width: 1.5 } }, hovertemplate: "%{text}: %{x:.1f} kt<extra></extra>", showlegend: false }; });
+  plot("sk-strip", tr, { margin: { l: 44, t: 10 }, xaxis: { title: { text: "ERA5 largest 24-h wind increase (kt)" }, range: [0, 36] }, yaxis: { type: "category" },
+    shapes: [{ type: "line", x0: thr, x1: thr, yref: "paper", y0: 0, y1: 1, line: { color: css("--accent"), width: 2 } }, { type: "line", x0: 30, x1: 30, yref: "paper", y0: 0, y1: 1, line: { color: css("--muted"), dash: "dash", width: 1 } }] });
+}
+
+/* =================== 5 CMIP6 COUNTS =================== */
+let tsPick;
+function renderCounts() {
+  const det = segVal("ct-det"), ocean = segVal("ct-oc") === "1", split = segVal("ct-split"), [y0, y1] = clampYears("ct-y0", "ct-y1");
+  const rows = [];
+  for (const m of D.cmip6) {
+    const yrs = modelYears(m, det, y0, y1); if (!yrs.length) continue;
+    const idx = tracksOf(m, det, ocean, y0, y1), t = m[det];
+    const bb = idx.filter(i => t.lo[i] >= D.const.as_lon).length, as = idx.length - bb;
+    rows.push({ name: m.name, bb: bb / yrs.length, as: as / yrs.length, tot: idx.length / yrs.length, n: yrs.length });
+  }
+  rows.sort((a, b) => b.tot - a.tot);
+  const ny = imdYears(y0, y1), obs = [];
+  if (ny) for (const [lab, kt] of [["IMD depression+", D.const.d_kt], ["IMD cyclonic storm+", D.const.cs_kt]]) {
+    const idx = imdIdx(y0, y1, kt);
+    obs.push({ name: lab, bb: idx.filter(i => D.imd.basin[i] === "BB").length / ny, as: idx.filter(i => D.imd.basin[i] === "AS").length / ny, tot: idx.length / ny, n: ny });
+  }
+  const all = rows.concat(obs), names = all.map(r => r.name);
+  const isObs = all.map(r => r.name.startsWith("IMD"));
+  const hov = r => `${r.name}<br>%{y:.2f} per year<br>${r.n} years<extra></extra>`;
+  let tr;
+  if (split === "basin") tr = [
+    { type: "bar", x: names, y: all.map(r => r.bb), name: "Bay of Bengal", marker: { color: all.map((r, i) => isObs[i] ? css("--imd") : css("--uz")) }, hovertemplate: "%{x}<br>Bay of Bengal %{y:.2f}/yr<extra></extra>" },
+    { type: "bar", x: names, y: all.map(r => r.as), name: "Arabian Sea", marker: { color: all.map((r, i) => isObs[i] ? css("--muted") : css("--owz")) }, hovertemplate: "%{x}<br>Arabian Sea %{y:.2f}/yr<extra></extra>" }];
+  else tr = [{ type: "bar", x: names, y: all.map(r => r.tot), name: "storms per year", marker: { color: all.map((r, i) => isObs[i] ? css("--imd") : css("--uz")) }, hovertemplate: "%{x}<br>%{y:.2f} per year<extra></extra>", showlegend: false }];
+  plot("ct-bar", tr, { barmode: "stack", bargap: 0.3, yaxis: { title: { text: "storms per year" } }, xaxis: { tickangle: -35, tickfont: { family: css("--f-body"), size: 11 } }, margin: { b: 110 } });
+  const best = rows[0];
+  $("ct-bar-cap").innerHTML = `<b>Figure 6. ${det.toUpperCase()} storms per year, ${y0}–${y1}${ocean ? ", ocean genesis only" : ", all tracks"}.</b> Models in blue (Bay of Bengal) and orange (Arabian Sea), IMD in dark and grey${ny ? ` (IMD over ${Math.max(y0, 1982)}–${Math.min(y1, 2023)})` : " (no IMD data in this period)"}. Highest model: ${best ? `${best.name} with ${fmt(best.tot, 2)} per year` : "–"}.` + (det === "owz" && y0 < 2015 ? " CNRM-CM6-1-HR OWZ uses only its 2015–2050 years (no historical humidity)." : "");
+  renderTS(); renderTrend();
+}
+function annual(m, det, ocean) {
+  const yrs = det === "owz" ? m.owz_years : m.years, c = new Map(yrs.map(y => [y, 0])), t = m[det];
+  for (let i = 0; i < t.y.length; i++) if ((!ocean || t.oc[i]) && c.has(t.y[i])) c.set(t.y[i], c.get(t.y[i]) + 1);
+  return [yrs, yrs.map(y => c.get(y))];
+}
+function renderTS() {
+  const det = segVal("ct-det"), ocean = segVal("ct-oc") === "1", w = +$("ts-smooth").value, im = segVal("ts-imd"), p = pal();
+  $("ts-smooth-v").textContent = w === 1 ? "off" : `${w} years`;
+  const tr = [];
+  for (const [name, slot] of tsPick.get()) {
+    const [x, y] = annual(MODEL(name), det, ocean);
+    tr.push({ x, y, mode: "lines", line: { color: p[slot], width: 0.8 }, opacity: 0.45, name, legendgroup: name, showlegend: false, hovertemplate: `${name} %{x}: %{y}<extra></extra>` });
+    tr.push({ x, y: running(y, w), mode: "lines", line: { color: p[slot], width: 2.5 }, name, legendgroup: name, hovertemplate: `${name} %{x}: %{y:.2f} (mean)<extra></extra>` });
+  }
+  if (im !== "none") {
+    const kt = im === "d" ? D.const.d_kt : D.const.cs_kt, yrs = [], cnt = [];
+    for (let y = 1982; y <= 2023; y++) { yrs.push(y); cnt.push(imdIdx(y, y, kt).length); }
+    tr.push({ x: yrs, y: cnt, mode: "lines", line: { color: css("--imd"), width: 0.8 }, opacity: 0.5, name: "IMD", legendgroup: "IMD", showlegend: false, hovertemplate: "IMD %{x}: %{y}<extra></extra>" });
+    tr.push({ x: yrs, y: running(cnt, w), mode: "lines", line: { color: css("--imd"), width: 2.5 }, name: im === "d" ? "IMD depression+" : "IMD cyclonic storm+", legendgroup: "IMD", hovertemplate: "IMD %{x}: %{y:.2f} (mean)<extra></extra>" });
+  }
+  plot("ts-plot", tr, { xaxis: { range: [1949, 2051] }, yaxis: { title: { text: "storms per year" }, rangemode: "tozero" }, hovermode: "closest",
+    shapes: [{ type: "line", x0: 2014.5, x1: 2014.5, yref: "paper", y0: 0, y1: 1, line: { dash: "dash", color: css("--muted"), width: 1 } }] });
+}
+function renderTrend() {
+  const det = segVal("ct-det"), ocean = segVal("ct-oc") === "1";
+  const P = [[1950, 1981], [1982, 2014], [2015, 2050]];
+  const rows = D.cmip6.map(m => {
+    const [x, y] = annual(m, det, ocean), r = { name: m.name };
+    P.forEach(([a, b], k) => { const s = y.filter((_, i) => x[i] >= a && x[i] <= b); r["p" + k] = s.length ? mean(s) : null; });
+    r.trend = linfit(x, y) * 10; r.change = r.p2 !== null && r.p1 !== null ? r.p2 - r.p1 : null;
+    return r;
+  });
+  sortableTable($("ct-trend"), [{ k: "name", label: "Model" }, { k: "p0", label: "1950–81", d: 2 }, { k: "p1", label: "1982–2014", d: 2 }, { k: "p2", label: "2015–50", d: 2 }, { k: "change", label: "2015–50 minus 1982–2014", d: 2 }, { k: "trend", label: "Trend per decade", d: 3 }], rows, { sortKey: "p1" });
+  $("ct-trend-cap").textContent = `Table 3. Mean ${det.toUpperCase()} storms per year in three periods (${ocean ? "ocean genesis" : "all tracks"}) and the least-squares linear trend over all available years. Click a heading to sort.`;
+}
+
+/* =================== 6 MAPS =================== */
+const mpMonths = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+function mapPanel(id, src) {
+  const det = segVal("mp-det"), ocean = segVal("mp-oc") === "1", show = segVal("mp-show"), [y0, y1] = clampYears("mp-y0", "mp-y1");
+  let paths, gla, glo, vs, labs, nyr, title_;
+  if (src === "IMD") {
+    const idx = imdIdx(y0, y1, D.const.d_kt, mpMonths); nyr = imdYears(y0, y1);
+    paths = idx.map(i => D.imd.path[i]); gla = idx.map(i => D.imd.la[i]); glo = idx.map(i => D.imd.lo[i]); vs = idx.map(i => D.imd.v[i]);
+    labs = idx.map(i => `${D.imd.name[i] === "NOT_NAMED" ? "unnamed" : title(D.imd.name[i].toLowerCase())} ${D.imd.y[i]}-${String(D.imd.mo[i]).padStart(2, "0")}<br>peak ${D.imd.v[i]} kt`);
+    title_ = `IMD best track (depression+), ${Math.max(y0, 1982)}–${Math.min(y1, 2023)}`;
+  } else {
+    const m = MODEL(src), t = m[det], idx = tracksOf(m, det, ocean, y0, y1, mpMonths); nyr = modelYears(m, det, y0, y1).length;
+    paths = idx.map(i => t.path[i]); gla = idx.map(i => t.la[i]); glo = idx.map(i => t.lo[i]); vs = idx.map(i => t.v[i]);
+    labs = idx.map(i => `${src} ${t.y[i]}-${String(t.mo[i]).padStart(2, "0")}<br>peak V850 ${fmt(t.v[i], 0)} kt, ${fmt(t.p[i], 0)} hPa<br>${t.dy[i]} days`);
+    title_ = `${src} ${det.toUpperCase()}, ${y0}–${y1}`;
+  }
+  const n = paths.length, per = nyr ? n / nyr : NaN;
+  const tr = [coastTrace()];
+  if (show === "tracks") {
+    // one trace per wind class (IMD depression / cyclonic storm / very severe) keeps it fast and gives a legend
+    const bands = [[0, 34, "below 34 kt", "--nri", 0.9], [34, 64, "34–63 kt", "--uz", 1.4], [64, 999, "64 kt and above", "--ri", 1.8]];
+    for (const [lo, hi, lab, col, w] of bands) {
+      const x = [], y = [], tx = [];
+      paths.forEach((p, k) => { const v = vs[k] ?? 0; if (v >= lo && v < hi) { p.forEach(q => { x.push(q[1]); y.push(q[0]); tx.push(labs[k]); }); x.push(null); y.push(null); tx.push(null); } });
+      tr.push({ x, y, text: tx, mode: "lines", line: { color: css(col), width: w }, name: lab, hovertemplate: "%{text}<extra></extra>", opacity: 0.85 });
+    }
+  } else if (show === "gen") {
+    tr.push({ x: glo, y: gla, text: labs, mode: "markers", name: "genesis", showlegend: false, hovertemplate: "%{text}<extra></extra>",
+              marker: { size: 7, color: vs, colorscale: [[0, "#b7d3f6"], [1, "#0d366b"]], cmin: 15, cmax: 90, opacity: 0.8, line: { color: css("--surface"), width: 0.5 }, colorbar: { title: { text: "kt", side: "top" }, thickness: 10, len: 0.6, tickfont: { size: 10 } } } });
+  } else {
+    const x = [], y = []; paths.forEach(p => p.forEach(q => { x.push(q[1]); y.push(q[0]); }));
+    const b = 1.35, xb = [], yb = [];
+    for (let v = 45; v <= 110; v += b) xb.push(v); for (let v = -5; v <= 35; v += b) yb.push(v);
+    const z = yb.map(() => xb.map(() => 0));
+    x.forEach((xx, k) => { const i = Math.floor((y[k] + 5) / b), j = Math.floor((xx - 45) / b); if (z[i] && z[i][j] !== undefined) z[i][j] += 1; });
+    const zz = z.map(r => r.map(v => v && nyr ? v / nyr : null));
+    tr.push({ type: "heatmap", x: xb.map(v => v + b / 2), y: yb.map(v => v + b / 2), z: zz, colorscale: [[0, "#cde2fb"], [0.5, "#3987e5"], [1, "#0d366b"]], zmin: 0, zmax: densMax,
+              hovertemplate: "%{y:.1f}°N %{x:.1f}°E<br>%{z:.2f} storm-days per year<extra></extra>", colorbar: { title: { text: "days/yr", side: "top" }, thickness: 10, len: 0.6, tickfont: { size: 10 } } });
+    tr.push(Object.assign(coastTrace(), { fill: "none" }));
+  }
+  plot(id, tr, mapLayout([55, 105, 0, 32], { margin: { t: 10 }, legend: { y: -0.12, yanchor: "top" } }));
+  $(id + "-t").innerHTML = `<b>${title_}</b>: ${n} tracks, ${fmt(per, 2)} per year`;
+}
+let densMax = 0.6;
+function renderMaps() {
+  if (segVal("mp-show") === "dens") densMax = segVal("mp-det") === "owz" ? 0.8 : 0.6;
+  mapPanel("mp-left", $("mp-a").value); mapPanel("mp-right", $("mp-b").value);
+}
+
+/* =================== 7 INTENSITY =================== */
+let sePick;
+function renderIntensity() {
+  const det = segVal("in-det"), ocean = segVal("in-oc") === "1", q = segVal("in-q"), [y0, y1] = clampYears("in-y0", "in-y1");
+  const lab = { v: "peak wind (kt)", p: "minimum pressure (hPa)", dv: "largest 24-h wind increase (kt)", dy: "duration (days)" }[q];
+  const tr = [];
+  const models = D.cmip6.map(m => ({ m, idx: tracksOf(m, det, ocean, y0, y1) })).filter(o => o.idx.length).sort((a, b) => b.idx.length - a.idx.length);
+  for (const { m, idx } of models) {
+    const vals = idx.map(i => m[det][q][i]).filter(v => v !== null);
+    tr.push({ type: "box", y: vals, name: `${m.name} (${idx.length})`, boxpoints: vals.length < 400 ? "all" : "outliers", jitter: 0.4, pointpos: 0, marker: { color: css("--uz"), size: 3, opacity: 0.6 }, line: { color: css("--uz"), width: 1.2 }, fillcolor: "rgba(0,0,0,0)", showlegend: false, hoverinfo: "y+name" });
+  }
+  if (q === "v" || q === "p") {
+    const idx = imdIdx(Math.max(y0, 1982), Math.min(y1, 2023), D.const.d_kt);
+    const vals = idx.map(i => D.imd[q][i]).filter(v => v !== null);
+    if (vals.length) tr.push({ type: "box", y: vals, name: `IMD (${vals.length})`, boxpoints: "outliers", marker: { color: css("--imd"), size: 3 }, line: { color: css("--imd"), width: 1.6 }, fillcolor: "rgba(0,0,0,0)", showlegend: false, hoverinfo: "y+name" });
+  }
+  const shapes = q === "dv" ? [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: KT_RI, y1: KT_RI, line: { color: css("--ri"), dash: "dash", width: 1.2 } }] : [];
+  plot("in-box", tr, { yaxis: { title: { text: lab } }, xaxis: { tickangle: -35, tickfont: { family: css("--f-body"), size: 11 } }, margin: { b: 120 }, shapes });
+  const capq = { v: "Peak wind along each track. Model wind is the daily-mean 850 hPa wind; IMD is the 3-minute surface wind of all depressions and stronger storms since 1982. Even at 850 hPa, where wind is usually stronger than at the surface, half of the model ocean storms peak below about 48 kt (UZ), while IMD storms reach 130 kt.",
+    p: "Lowest sea-level pressure along each track. Only about one model storm in eight falls below 985 hPa and the deepest reaches about 969 hPa, while severe IMD storms fall below 940 hPa.",
+    dv: "Largest day-to-day increase of the 850 hPa wind along each track. The red dashed line is the IMD RI threshold of 30 kt; almost no model track reaches it.",
+    dy: "Track duration in days. Half of the model storms last 3–6 days (median 4), similar to observed storms, so the trackers follow complete life cycles even though the storms are weak. Three days is the minimum length allowed." }[q];
+  $("in-box-cap").innerHTML = `<b>Figure 9. ${title(lab)}, ${det.toUpperCase()} tracks ${y0}–${y1}${ocean ? " (ocean genesis)" : ""}.</b> Each box spans the middle half of the tracks, with the median line; numbers in brackets are track counts. ${capq}`;
+  renderRIcount(); renderSeasonal();
+}
+function renderRIcount() {
+  const det = segVal("in-det"), ocean = segVal("in-oc") === "1", [y0, y1] = clampYears("in-y0", "in-y1"), thr = +$("in-thr").value;
+  $("in-thr-v").textContent = `${thr} kt`;
+  const rows = D.cmip6.map(m => { const idx = tracksOf(m, det, ocean, y0, y1); return { name: m.name, n: idx.length, k: idx.filter(i => m[det].dv[i] !== null && m[det].dv[i] >= thr).length }; }).sort((a, b) => b.k - a.k || b.n - a.n);
+  plot("in-ri", [{ type: "bar", x: rows.map(r => r.name), y: rows.map(r => r.k), text: rows.map(r => r.k ? `${fmt(100 * r.k / r.n, 1)}%` : ""), textposition: "outside", marker: { color: css("--ri") },
+    hovertemplate: "%{x}<br>%{y} tracks ≥ " + thr + " kt<extra></extra>" }],
+    { yaxis: { title: { text: `tracks with ΔV24 ≥ ${thr} kt` }, rangemode: "tozero" }, xaxis: { tickangle: -35, tickfont: { family: css("--f-body"), size: 11 } }, margin: { b: 110 } });
+  const tot = rows.reduce((s, r) => s + r.k, 0);
+  $("in-ri-cap").innerHTML = `<b>Figure 10. Model tracks reaching a ${thr} kt daily wind increase</b> (${det.toUpperCase()}, ${y0}–${y1}${ocean ? ", ocean genesis" : ""}); the label is the share of each model's tracks. ${tot} track${tot === 1 ? "" : "s"} in all. Move the slider: at the IMD threshold of 30 kt almost no model track qualifies; at 15 kt intensifying storms appear, mostly in CNRM-CM6-1-HR and HadGEM3-GC31-MM.`;
+}
+function renderSeasonal() {
+  const det = segVal("in-det"), ocean = segVal("in-oc") === "1", [y0, y1] = clampYears("in-y0", "in-y1"), p = pal(), tr = [];
+  for (const [name, slot] of sePick.get()) {
+    const m = MODEL(name), idx = tracksOf(m, det, ocean, y0, y1); if (!idx.length) continue;
+    const c = Array(12).fill(0); idx.forEach(i => c[m[det].mo[i] - 1]++);
+    tr.push({ x: MONTHS, y: c.map(v => v / idx.length), mode: "lines+markers", name: `${name} (${idx.length})`, line: { color: p[slot], width: 2 }, marker: { size: 5 }, hovertemplate: `${name} %{x}: %{y:.0%}<extra></extra>` });
+  }
+  const idx = imdIdx(1982, 2023, D.const.cs_kt), c = Array(12).fill(0); idx.forEach(i => c[D.imd.mo[i] - 1]++);
+  tr.push({ x: MONTHS, y: c.map(v => v / idx.length), mode: "lines+markers", name: `IMD cyclonic storm+ 1982–2023 (${idx.length})`, line: { color: css("--imd"), width: 3 }, marker: { size: 6 }, hovertemplate: "IMD %{x}: %{y:.0%}<extra></extra>" });
+  plot("se-plot", tr, { yaxis: { title: { text: "share of storms" }, tickformat: ".0%", rangemode: "tozero" }, hovermode: "x unified" });
+}
+
+/* =================== routing & wiring =================== */
+const VIEWS = ["overview", "methods", "storms", "skill", "counts", "maps", "intensity", "limits"];
+const RENDER = { overview: renderOverview, methods: renderMethods, storms: () => { renderStormList(); renderStorm(); }, skill: renderSkill, counts: renderCounts, maps: renderMaps, intensity: renderIntensity, limits: () => {} };
+const rendered = new Set();
+function show() {
+  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "overview";
+  VIEWS.forEach(x => { $("v-" + x).hidden = x !== v; });
+  document.querySelectorAll("#tabs a").forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#" + v ? "page" : "false"));
+  if (!rendered.has(v)) { RENDER[v](); rendered.add(v); }
+  else document.querySelectorAll(`#v-${v} .js-plotly-plot`).forEach(el => Plotly.Plots.resize(el));
+}
+function wire() {
+  seg("st-filter", () => renderStormList());
+  $("st-list").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; curStorm = b.dataset.s; renderStormList(); renderStorm(); });
+  seg("sk-metric", drawDumbbell);
+  $("sk-thr").addEventListener("input", drawRI);
+  ["ct-det", "ct-oc", "ct-split"].forEach(id => seg(id, renderCounts));
+  $("ct-pre").dataset.momentary = "";
+  seg("ct-pre", v => { const [a, b] = v.split(","); $("ct-y0").value = a; $("ct-y1").value = b; renderCounts(); });
+  ["ct-y0", "ct-y1"].forEach(id => $(id).addEventListener("change", renderCounts));
+  seg("ts-imd", renderTS); $("ts-smooth").addEventListener("input", renderTS);
+  tsPick = modelPicker("ts-models", ["CNRM-CM6-1-HR", "HadGEM3-GC31-MM", "EC-Earth3", "CESM2"], renderTS);
+  const opts = ["IMD", ...D.cmip6.map(m => m.name)].map(n => `<option value="${n}">${n === "IMD" ? "IMD best track" : n}</option>`).join("");
+  $("mp-a").innerHTML = opts; $("mp-b").innerHTML = opts; $("mp-a").value = "HadGEM3-GC31-MM"; $("mp-b").value = "IMD";
+  ["mp-a", "mp-b", "mp-y0", "mp-y1"].forEach(id => $(id).addEventListener("change", renderMaps));
+  ["mp-det", "mp-oc", "mp-show"].forEach(id => seg(id, renderMaps));
+  $("mp-months").innerHTML = MONTHS.map((m, i) => `<button class="chip" data-mo="${i + 1}" aria-pressed="true">${m}</button>`).join("") +
+    `<button class="chip" data-pre="4,5,6">Pre-monsoon</button><button class="chip" data-pre="10,11,12">Post-monsoon</button><button class="chip" data-pre="1,2,3,4,5,6,7,8,9,10,11,12">All</button>`;
+  $("mp-months").addEventListener("click", e => {
+    const b = e.target.closest(".chip"); if (!b) return;
+    if (b.dataset.pre) { mpMonths.clear(); b.dataset.pre.split(",").forEach(x => mpMonths.add(+x)); }
+    else { const k = +b.dataset.mo; mpMonths.has(k) ? mpMonths.delete(k) : mpMonths.add(k); }
+    $("mp-months").querySelectorAll("[data-mo]").forEach(c => c.setAttribute("aria-pressed", mpMonths.has(+c.dataset.mo)));
+    renderMaps();
+  });
+  ["in-det", "in-oc", "in-q"].forEach(id => seg(id, renderIntensity));
+  ["in-y0", "in-y1"].forEach(id => $(id).addEventListener("change", renderIntensity));
+  $("in-thr").addEventListener("input", renderRIcount);
+  sePick = modelPicker("se-models", ["HadGEM3-GC31-MM", "CNRM-CM6-1-HR", "EC-Earth3", "MPI-ESM1-2-HR"], renderSeasonal);
+  window.addEventListener("hashchange", show);
+  // re-colour every drawn chart when the theme flips
+  const rerender = () => { tsPick.redraw(); sePick.redraw(); const v = [...rendered]; rendered.clear(); v.forEach(x => { RENDER[x](); rendered.add(x); }); };
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rerender);
+  new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+}
+fetch("data.json").then(r => r.json()).then(d => { D = d; $("loading").hidden = true; wire(); show(); })
+  .catch(err => { $("loading").textContent = "The data file could not be loaded (" + err.message + "). Reload the page to try again."; });
+</script>
